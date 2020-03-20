@@ -32,17 +32,11 @@
 #define CERT_STRING "Reliance on this"
 #define DART_CTRR_STRING "void dart_ctrr_reconfig" // From what I can tell the "Reliance on this..." string is gone as of iOS 13.x :(
 
-struct iboot_img { // from iBoot32Patcher
+struct iboot64_img { // from iBoot32Patcher
 	void* buf;
 	size_t len;
 	uint32_t VERS;
 } __attribute__((packed));
-
-struct iboot64_cmd_t {
-	uintptr_t cmd_str_ptr;
-	uintptr_t cmd_ptr;
-	uintptr_t cmd_desc_str_ptr;
-} __attribute__((packed)); // also from iBoot32Patcher
 
 #define LOG(fmt, ...) printf("[+] " fmt, ##__VA_ARGS__);
 #define WARN(fmt, ...) printf("[!] " fmt, ##__VA_ARGS__);
@@ -51,12 +45,12 @@ struct iboot64_cmd_t {
 #define GET_IBOOT_FILE_OFFSET(iboot_in, x) (x - (uintptr_t) iboot_in->buf)
 
 bool has_magic(uint8_t* buf);
-int patch_boot_args64(struct iboot_img* iboot_in, char* bootargs);
+int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs);
 uint64_t get_iboot64_base_address(uint8_t* buf);
-uint64_t iboot64_ref(struct iboot_img* iboot_in, void* pat);
-int enable_kernel_debug(struct iboot_img* iboot_in);
-int rsa_sigcheck_patch(struct iboot_img* iboot_in);
-bool has_kernel_load(struct iboot_img* iboot_in);
-bool has_recovery_console(struct iboot_img* iboot_in);
-int do_command_handler_patch(struct iboot_img* iboot_in, char* command, uintptr_t ptr);
-int unlock_nvram(struct iboot_img* iboot_in);
+uint64_t iboot64_ref(struct iboot64_img* iboot_in, void* pat);
+int enable_kernel_debug(struct iboot64_img* iboot_in);
+int rsa_sigcheck_patch(struct iboot64_img* iboot_in);
+bool has_kernel_load(struct iboot64_img* iboot_in);
+bool has_recovery_console(struct iboot64_img* iboot_in);
+int do_command_handler_patch(struct iboot64_img* iboot_in, char* command, uintptr_t ptr);
+int unlock_nvram(struct iboot64_img* iboot_in);

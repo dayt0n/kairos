@@ -32,17 +32,17 @@ bool has_magic(uint8_t* buf) {
 	return false;
 }
 
-bool has_kernel_load(struct iboot_img* iboot_in) {
+bool has_kernel_load(struct iboot64_img* iboot_in) {
 	void* debug_enabled_str = memmem(iboot_in->buf, iboot_in->len, KERNELCACHE_PREP_STRING,strlen(KERNELCACHE_PREP_STRING));
 	return (bool) (debug_enabled_str != NULL);
 }
 
-bool has_recovery_console(struct iboot_img* iboot_in) {
+bool has_recovery_console(struct iboot64_img* iboot_in) {
 	void* entering_recovery_str = memmem(iboot_in->buf, iboot_in->len, ENTERING_RECOVERY_CONSOLE,strlen(ENTERING_RECOVERY_CONSOLE));
 	return (bool) (entering_recovery_str != NULL);
 }
 
-void* iboot64_memmem(struct iboot_img* iboot_in, void* pat) { // slightly modified from ih8sn0w's iboot_memmem()
+void* iboot64_memmem(struct iboot64_img* iboot_in, void* pat) { // slightly modified from ih8sn0w's iboot_memmem()
 	uint64_t new_pat = (uint64_t)GET_IBOOT64_ADDR(iboot_in, pat);
 	return (void*) memmem(iboot_in->buf,iboot_in->len,&new_pat,sizeof(uint64_t));
 }
@@ -55,7 +55,7 @@ uint64_t get_iboot64_base_address(uint8_t* buf) {  // modified from ih8sn0w's ge
 }
 /* end functions from iBoot32Patcher */
 
-uint64_t iboot64_ref(struct iboot_img* iboot_in, void* pat) {
+uint64_t iboot64_ref(struct iboot64_img* iboot_in, void* pat) {
 	uint64_t new_pat = (uintptr_t) GET_IBOOT64_ADDR(iboot_in, pat);
 	addr_t ref = xref64(iboot_in->buf,0,iboot_in->len,new_pat-get_iboot64_base_address(iboot_in->buf));
 	if(!ref) {
@@ -174,7 +174,7 @@ void do_rsa_sigcheck_patch(uint8_t* buf, uint64_t len, addr_t img4Xref, uint64_t
 	printf("[+] Did MOV r0, #0 and RET\n");
 }
 
-int patch_boot_args64(struct iboot_img* iboot_in, char* bootargs) {
+int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 	// find current boot-args
 	void* default_loc = NULL;
 	int num = 1;
@@ -232,7 +232,7 @@ int patch_boot_args64(struct iboot_img* iboot_in, char* bootargs) {
 	return doFinalBootArgs(iboot_in->buf,default_args_xref,get_iboot64_base_address(iboot_in->buf),(unsigned long long)default_loc);
 }
 
-int enable_kernel_debug(struct iboot_img* iboot_in) {
+int enable_kernel_debug(struct iboot64_img* iboot_in) {
 	void* debugLoc = NULL;
 	debugLoc = memmem(iboot_in->buf,iboot_in->len,"debug-enabled",strlen("debug-enabled"));
 	if(!debugLoc) {
@@ -252,7 +252,7 @@ int enable_kernel_debug(struct iboot_img* iboot_in) {
 	return 0;
 }
 
-int rsa_sigcheck_patch(struct iboot_img* iboot_in) {
+int rsa_sigcheck_patch(struct iboot64_img* iboot_in) {
 	void* img4Loc = NULL;
 	img4Loc = memmem(iboot_in->buf,iboot_in->len,"IMG4",4);
 	if(!img4Loc) {
@@ -270,7 +270,7 @@ int rsa_sigcheck_patch(struct iboot_img* iboot_in) {
 	return 0;
 }
 
-int do_command_handler_patch(struct iboot_img* iboot_in, char* command, uintptr_t ptr) { // useful for kicking off iBoot payloads
+int do_command_handler_patch(struct iboot64_img* iboot_in, char* command, uintptr_t ptr) { // useful for kicking off iBoot payloads
 	char* realCmd = (char*)malloc(strlen(command)+2); // nulls all around
 	memset(realCmd,0,strlen(command)+2); 
 	// need to search for null-surrounded \0__cmd__\0
@@ -298,7 +298,7 @@ int do_command_handler_patch(struct iboot_img* iboot_in, char* command, uintptr_
 	return 0;
 }
 
-int unlock_nvram(struct iboot_img* iboot_in) {
+int unlock_nvram(struct iboot64_img* iboot_in) {
 	void* debuguartLoc = memmem(iboot_in->buf,iboot_in->len,"debug-uarts",strlen("debug-uarts"));
 	if(!debuguartLoc) {
 		WARN("Unable to find debug-uarts string\n");

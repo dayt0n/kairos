@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
 	char* bootArgs = NULL;
 	char* command_str = NULL;
 	uint64_t command_ptr = 0;
-	struct iboot_img iboot_in;
+	struct iboot64_img iboot_in;
 	int ret = 0;
 	memset(&iboot_in, 0, sizeof(iboot_in));
 	bool doNvramUnlock = false;
