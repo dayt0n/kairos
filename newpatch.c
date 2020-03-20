@@ -32,12 +32,12 @@ bool has_magic(uint8_t* buf) {
 	return false;
 }
 
-bool has_kernel_load(struct iboot64_img* iboot_in) {
+bool has_kernel_load_k(struct iboot64_img* iboot_in) {
 	void* debug_enabled_str = memmem(iboot_in->buf, iboot_in->len, KERNELCACHE_PREP_STRING,strlen(KERNELCACHE_PREP_STRING));
 	return (bool) (debug_enabled_str != NULL);
 }
 
-bool has_recovery_console(struct iboot64_img* iboot_in) {
+bool has_recovery_console_k(struct iboot64_img* iboot_in) {
 	void* entering_recovery_str = memmem(iboot_in->buf, iboot_in->len, ENTERING_RECOVERY_CONSOLE,strlen(ENTERING_RECOVERY_CONSOLE));
 	return (bool) (entering_recovery_str != NULL);
 }

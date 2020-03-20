@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
 		WARN("%s does not appear to be stripped\n",inFile);
 		return -1;
 	}
-	if(has_kernel_load(&iboot_in)) {
+	if(has_kernel_load_k(&iboot_in)) {
 		LOG("Does have kernel load\n");
 		if(bootArgs) {
 			LOG("Patching boot-args...\n");
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
 		if(ret < 0) // won't fail because it is not fatal, but it would really be nice if we had k-debug
 			WARN("Could not enable kernel debug\n");
 	}
-	if(has_recovery_console(&iboot_in)) {
+	if(has_recovery_console_k(&iboot_in)) {
 		if(command_str && (command_ptr != 0)) { // need to reassign command handler
 			LOG("Changing command handler %s to 0x%llx...\n",command_str,command_ptr);
 			ret = do_command_handler_patch(&iboot_in,command_str,command_ptr);
