@@ -15,7 +15,7 @@ void term_kernel(void);
 
 enum { SearchInCore, SearchInPrelink, SearchInPPL };
 
-typedef unsigned long long addr_t;
+typedef uint64_t addr_t;
 
 uint64_t find_register_value(uint64_t where, int reg);
 uint64_t find_reference(uint64_t to, int n, int prelink);

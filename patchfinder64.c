@@ -446,7 +446,6 @@ xref64code(const uint8_t *buf, addr_t start, addr_t end, addr_t what)
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <mach-o/loader.h>
 //#include "vfs.h" // img4lib
 
 #ifdef __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__
@@ -519,6 +518,10 @@ static addr_t kerndumpbase = -1;
 static addr_t kernel_entry = 0;
 static void *kernel_mh = 0;
 static addr_t kernel_delta = 0;
+
+#ifdef KERNMODE
+
+#include <mach-o/loader.h>
 
 int
 init_kernel(addr_t base, const char *filename)
@@ -697,6 +700,7 @@ term_kernel(void)
 {
     free(kernel);
 }
+#endif
 
 /* these operate on VA ******************************************************/
 
