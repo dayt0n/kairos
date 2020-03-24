@@ -135,8 +135,10 @@ void do_rsa_sigcheck_patch(uint8_t* buf, uint64_t len, addr_t img4Xref, uint64_t
 	addr_t img4refFtop = bof64(buf, 0, img4Xref);
 	printf("[+] Found beginning of _image4_get_partial at 0x%llx\n",img4refFtop);
 	// jump around
-	addr_t img4GetPartialRef = xref64code(buf, 0, len, img4refFtop); // ignore this one, we want second bl
-	img4GetPartialRef = xref64code(buf,img4GetPartialRef+4,len-img4GetPartialRef-4,img4refFtop);
+	addr_t oldImg4GetPartialRef = xref64code(buf, 0, len, img4refFtop); // ignore this one, we want second bl
+	addr_t img4GetPartialRef = xref64code(buf,oldImg4GetPartialRef+4,len-oldImg4GetPartialRef-4,img4refFtop);
+	if(get_type(get_insn(buf,img4GetPartialRef)) != bl) // if just plain branch, not the right one. Probably first branch
+		img4GetPartialRef = oldImg4GetPartialRef;       // discovered while testing iOS 13.4 (iPhone SE) images
 	printf("[+] Found xref to _image4_get_partial at 0x%llx\n",img4GetPartialRef);
 	addr_t getPartialRefFtop = bof64(buf,0,img4GetPartialRef);
 	printf("[+] Found start of sub_%llx\n",base+getPartialRefFtop);
