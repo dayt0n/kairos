@@ -73,10 +73,12 @@ int main(int argc, char* argv[]) {
 	fclose(fp);
 	// patch
 	LOG("Patching %s\n",inFile);
+    #ifndef _WIN32
 	if(has_magic(iboot_in.buf)) { // make sure we aren't dealing with a packed IMG4 container
 		WARN("%s does not appear to be stripped\n",inFile);
 		return -1;
 	}
+    #endif
 	if(has_kernel_load_k(&iboot_in)) {
 		LOG("Does have kernel load\n");
 		if(bootArgs) {
