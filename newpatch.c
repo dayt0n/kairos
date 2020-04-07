@@ -22,11 +22,31 @@
 #define _GNU_SOURCE
 #include "newpatch.h"
 
+#ifdef _WIN32
+void *memmem(const void *haystack, size_t haystack_len, 
+    const void * const needle, const size_t needle_len)
+{
+    if (haystack == NULL) return NULL; // or assert(haystack != NULL);
+    if (haystack_len == 0) return NULL;
+    if (needle == NULL) return NULL; // or assert(needle != NULL);
+    if (needle_len == 0) return NULL;
+
+    for (const char *h = haystack;
+            haystack_len >= needle_len;
+            ++h, --haystack_len) {
+        if (!memcmp(h, needle, needle_len)) {
+            return h;
+        }
+    }
+    return NULL;
+}
+#endif
+
 /* begin functions from iBoot32Patcher by iH8sn0w*/
 bool has_magic(uint8_t* buf) {
-	uint8_t* magic;
-	memcpy(magic,buf+7,4);
-	if(memcmp(magic,IMAGE4_MAGIC,4) == 0) {
+	uint32_t magic;
+	magic = *(uint32_t*)(buf+7);
+	if(memcmp(&magic,IMAGE4_MAGIC,4) == 0) {
 		return true;
 	}
 	return false;
