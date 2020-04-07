@@ -44,9 +44,9 @@ void *memmem(const void *haystack, size_t haystack_len,
 
 /* begin functions from iBoot32Patcher by iH8sn0w*/
 bool has_magic(uint8_t* buf) {
-	uint8_t* magic;
-	memcpy(magic,buf+7,4);
-	if(memcmp(magic,IMAGE4_MAGIC,4) == 0) {
+	uint32_t magic;
+	magic = *(uint32_t*)(buf+7);
+	if(memcmp(&magic,IMAGE4_MAGIC,4) == 0) {
 		return true;
 	}
 	return false;
