@@ -68,8 +68,8 @@ void* iboot64_memmem(struct iboot64_img* iboot_in, void* pat) { // slightly modi
 }
 
 uint64_t get_iboot64_base_address(uint8_t* buf) {  // modified from ih8sn0w's get_iboot_base_address()
-	if(buf) { // 0x1800B0000, only need mask for last 2 bytes
-		return *(uint64_t*)(buf + 0x318) & ~0xFFFF; // 0x20 is not where the address lies in 64-bit
+	if(buf) { // unlike iboot32patcher, no mask is needed here.
+		return *(uint64_t*)(buf + 0x318); // 0x20 is not where the address lies in 64-bit
 	}
 	return 0;
 }
@@ -151,14 +151,38 @@ void do_kdbg_mov(uint8_t* buf, addr_t xref, uint64_t base) {
 	printf("[+] Wrote MOVZ X0, #1 to 0x%llx\n",xref+base);
 }
 
+bool checkIMG4Ref(uint8_t* buf, addr_t xref) {
+	xref -= 4;
+	for(int i = 0; i < 10; i++) {
+		/*
+		 * looking for
+		 * add x2, sp, #0x...
+		 * add x3, sp, #0x...
+		*/
+		if((get_type(get_insn(buf,xref)) == add) && (get_rd(get_insn(buf,xref)) == 3) && (get_rn(get_insn(buf,xref)) == 0x1f)) {
+			if((get_type(get_insn(buf,xref-4)) == add) && (get_rd(get_insn(buf,xref-4)) == 2) && (get_rn(get_insn(buf,xref-4)) == 0x1f))
+				return true;
+		}
+		xref -= 4;
+	}
+	return false;
+}
+
 void do_rsa_sigcheck_patch(uint8_t* buf, uint64_t len, addr_t img4Xref, uint64_t base) {
 	addr_t img4refFtop = bof64(buf, 0, img4Xref);
 	printf("[+] Found beginning of _image4_get_partial at 0x%llx\n",img4refFtop);
 	// jump around
-	addr_t oldImg4GetPartialRef = xref64code(buf, 0, len, img4refFtop); // ignore this one, we want second bl
-	addr_t img4GetPartialRef = xref64code(buf,oldImg4GetPartialRef+4,len-oldImg4GetPartialRef-4,img4refFtop);
-	if(get_type(get_insn(buf,img4GetPartialRef)) != bl) // if just plain branch, not the right one. Probably first branch
-		img4GetPartialRef = oldImg4GetPartialRef;       // discovered while testing iOS 13.4 (iPhone SE) images
+	addr_t img4GetPartialRef = xref64code(buf, 0, len, img4refFtop);
+	for(int i = 0; i < 20; i++) {
+		if(checkIMG4Ref(buf,img4GetPartialRef))
+			break;
+		img4GetPartialRef = xref64code(buf,img4GetPartialRef+4,len-img4GetPartialRef-4,img4refFtop);
+		if(i == 19) {
+			printf("[!] Could not find correct xref for _image4_get_partial.\n");
+			printf("[!] RSA PATCH FAILED\n");
+			return;
+		}
+	}
 	printf("[+] Found xref to _image4_get_partial at 0x%llx\n",img4GetPartialRef);
 	addr_t getPartialRefFtop = bof64(buf,0,img4GetPartialRef);
 	printf("[+] Found start of sub_%llx\n",base+getPartialRefFtop);
