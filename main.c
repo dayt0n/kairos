@@ -77,6 +77,7 @@ int main(int argc, char* argv[]) {
 		WARN("%s does not appear to be stripped\n",inFile);
 		return -1;
 	}
+	LOG("Base address: 0x%llx\n",get_iboot64_base_address(&iboot_in));
 	if(has_kernel_load_k(&iboot_in)) {
 		LOG("Does have kernel load\n");
 		if(bootArgs) {

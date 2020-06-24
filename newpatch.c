@@ -67,17 +67,34 @@ void* iboot64_memmem(struct iboot64_img* iboot_in, void* pat) { // slightly modi
 	return (void*) memmem(iboot_in->buf,iboot_in->len,&new_pat,sizeof(uint64_t));
 }
 
-uint64_t get_iboot64_base_address(uint8_t* buf) {  // modified from ih8sn0w's get_iboot_base_address()
-	if(buf) { // unlike iboot32patcher, no mask is needed here.
-		return *(uint64_t*)(buf + 0x318); // 0x20 is not where the address lies in 64-bit
+uint64_t get_iboot64_base_address(struct iboot64_img* iboot_in) {  // modified from ih8sn0w's get_iboot_base_address()
+	uint32_t offset = 0x318;
+	get_iboot64_main_version(iboot_in);
+	if(iboot_in->buf) {
+		if(iboot_in->VERS >= 6603) // as of iOS 14, the base address appears to have been moved to 0x300
+			offset = 0x300;
+		iboot_in->base = *(uint64_t*)(iboot_in->buf + offset);
+		return iboot_in->base;
 	}
 	return 0;
 }
 /* end functions from iBoot32Patcher */
 
+uint32_t get_iboot64_main_version(struct iboot64_img* iboot_in) {
+	void* versionString = memmem(iboot_in->buf,iboot_in->len,"iBoot-",strlen("iBoot-"));
+	if(!versionString) {
+		return 0;
+	}
+	char vers[5];
+	strncpy(vers,versionString+6,4);
+	uint32_t ver = atoi(vers);
+	iboot_in->VERS = ver;
+	return ver;
+}
+
 uint64_t iboot64_ref(struct iboot64_img* iboot_in, void* pat) {
 	uint64_t new_pat = (uintptr_t) GET_IBOOT64_ADDR(iboot_in, pat);
-	addr_t ref = xref64(iboot_in->buf,0,iboot_in->len,new_pat-get_iboot64_base_address(iboot_in->buf));
+	addr_t ref = xref64(iboot_in->buf,0,iboot_in->len,new_pat-iboot_in->base);
 	if(!ref) {
 		return -1;
 	}
@@ -224,7 +241,7 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 	// find current boot-args
 	void* default_loc = NULL;
 	int num = 1;
-	LOG("Image base address at 0x%llx\n",get_iboot64_base_address(iboot_in->buf));
+	LOG("Image base address at 0x%llx\n",iboot_in->base);
 	default_loc = memmem(iboot_in->buf,iboot_in->len,DEFAULT_BOOTARGS_STRING,strlen(DEFAULT_BOOTARGS_STRING));
 	if(!default_loc) { // if those are not found, try for the other possible string
 		LOG("Searching for alternate boot-args\n");
@@ -264,7 +281,7 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 			LOG("Pointing boot-arg xref to cert string at: %p\n",GET_IBOOT64_ADDR(iboot_in,cert_loc));
 			memset(cert_loc,' ',179); // zero out cert_loc
 		}
-		change_bootarg_adr_xref_addr(iboot_in->buf,default_args_xref,(unsigned long long)cert_loc,get_iboot64_base_address(iboot_in->buf));
+		change_bootarg_adr_xref_addr(iboot_in->buf,default_args_xref,(unsigned long long)cert_loc,iboot_in->base);
 		default_loc = cert_loc;
 	}
 	else if(strlen(bootargs) > 179) {
@@ -275,7 +292,7 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 	}
 	strncpy(default_loc,bootargs,strlen(bootargs)+num); // main part done. also no null terminator. don't like those
 	// now to patch up
-	return doFinalBootArgs(iboot_in->buf,default_args_xref,get_iboot64_base_address(iboot_in->buf),(unsigned long long)default_loc);
+	return doFinalBootArgs(iboot_in->buf,default_args_xref,iboot_in->base,(unsigned long long)default_loc);
 }
 
 int enable_kernel_debug(struct iboot64_img* iboot_in) {
@@ -293,7 +310,7 @@ int enable_kernel_debug(struct iboot64_img* iboot_in) {
 	}
 	LOG("Found debug-enabled xref at 0x%llx\n",debugEnabledXref);
 	// now hand off ctrl to patchfinder to get rid of bl and replace with an unconditional mov
-	do_kdbg_mov(iboot_in->buf,debugEnabledXref,get_iboot64_base_address(iboot_in->buf));
+	do_kdbg_mov(iboot_in->buf,debugEnabledXref,iboot_in->base);
 	LOG("Enabled kernel debug\n");
 	return 0;
 }
@@ -312,7 +329,7 @@ int rsa_sigcheck_patch(struct iboot64_img* iboot_in) {
 		return -1;
 	}
 	LOG("Found IMG4 xref at 0x%llx\n",img4Ref);
-	do_rsa_sigcheck_patch(iboot_in->buf, iboot_in->len, img4Ref, get_iboot64_base_address(iboot_in->buf));
+	do_rsa_sigcheck_patch(iboot_in->buf, iboot_in->len, img4Ref, iboot_in->base);
 	return 0;
 }
 
@@ -373,7 +390,7 @@ int unlock_nvram(struct iboot64_img* iboot_in) {
 		WARN("Could not find beginning of blacklist function\n");
 		return -1;
 	}
-	LOG("Forcing sub_%llx to return immediately\n",blacklistFuncBegin+get_iboot64_base_address(iboot_in->buf));
+	LOG("Forcing sub_%llx to return immediately\n",blacklistFuncBegin+iboot_in->base);
 	uint32_t movZeroZero = new_mov_immediate_insn(0,0);
 	uint32_t retInsn = new_ret_insn(-1);
 	write_opcode(iboot_in->buf,blacklistFuncBegin,movZeroZero);
@@ -393,7 +410,7 @@ int unlock_nvram(struct iboot64_img* iboot_in) {
 		WARN("Could not find beginning of second blacklist function\n");
 		return -1;
 	}
-	LOG("Forcing sub_%llx to return immediately\n",blacklistFunc2Begin+get_iboot64_base_address(iboot_in->buf));
+	LOG("Forcing sub_%llx to return immediately\n",blacklistFunc2Begin+iboot_in->base);
 	write_opcode(iboot_in->buf,blacklistFunc2Begin,movZeroZero);
 	write_opcode(iboot_in->buf,blacklistFunc2Begin+4,retInsn);
 	void* comAppleSystemLoc = memmem(iboot_in->buf,iboot_in->len,"com.apple.System.",strlen("com.apple.System.")+1);
@@ -414,7 +431,7 @@ int unlock_nvram(struct iboot64_img* iboot_in) {
 		WARN("Unable to find beginning of function where \"com.apple.System.\" is referenced\n");
 		return -1;
 	}
-	LOG("Forcing sub_%llx to return immediately\n",appleSystemFuncBegin+get_iboot64_base_address(iboot_in->buf));
+	LOG("Forcing sub_%llx to return immediately\n",appleSystemFuncBegin+iboot_in->base);
 	write_opcode(iboot_in->buf,appleSystemFuncBegin,movZeroZero);
 	write_opcode(iboot_in->buf,appleSystemFuncBegin+4,retInsn);
 	return 0;
