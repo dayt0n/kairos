@@ -24,6 +24,6 @@ Note: the input boot image file must be decrypted and unpacked
 
 Credits
 -------
-* [xerub](https://twitter.com/xerub) for patchfinder64
+* [xerub](https://twitter.com/xerub)/[Pwn20wnd](https://twitter.com/Pwn20wnd) for patchfinder64
 * [tihmstar](https://twitter.com/tihmstar) for code, inspiration, and patch methods
 * [iH8sn0w](https://twitter.com/iH8sn0w) for code

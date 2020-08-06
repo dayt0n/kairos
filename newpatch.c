@@ -163,7 +163,7 @@ void do_kdbg_mov(uint8_t* buf, addr_t xref, uint64_t base) {
 	xref = get_next_nth_insn(buf,xref,2,bl);
 	printf("[+] Found second bl after debug-enabled xref at 0x%llx\n",xref);
 	// now we need to change this bl to movz x0, #1
-	uint32_t movOp = new_mov_immediate_insn(0,1);
+	uint32_t movOp = new_mov_immediate_insn(0,1,1);
 	write_opcode(buf,xref,movOp);
 	printf("[+] Wrote MOVZ X0, #1 to 0x%llx\n",xref+base);
 }
@@ -230,7 +230,7 @@ void do_rsa_sigcheck_patch(uint8_t* buf, uint64_t len, addr_t img4Xref, uint64_t
 		crawl += 4; 
 	}
 	printf("[+] RET found for sub_%llx at 0x%llx\n",verifyFunc+base,crawl);
-	uint32_t movInsn = new_mov_immediate_insn(0,0);
+	uint32_t movInsn = new_mov_immediate_insn(0,0,1);
 	uint32_t retInsn = new_ret_insn(-1);
 	write_opcode(buf,crawl,movInsn);
 	write_opcode(buf,crawl+4,retInsn);
@@ -391,7 +391,7 @@ int unlock_nvram(struct iboot64_img* iboot_in) {
 		return -1;
 	}
 	LOG("Forcing sub_%llx to return immediately\n",blacklistFuncBegin+iboot_in->base);
-	uint32_t movZeroZero = new_mov_immediate_insn(0,0);
+	uint32_t movZeroZero = new_mov_immediate_insn(0,0,1);
 	uint32_t retInsn = new_ret_insn(-1);
 	write_opcode(iboot_in->buf,blacklistFuncBegin,movZeroZero);
 	write_opcode(iboot_in->buf,blacklistFuncBegin+4,retInsn);

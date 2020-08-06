@@ -200,7 +200,7 @@ int64_t get_addr_for_bl(addr_t offset, uint32_t insn) {
     uint64_t pc = offset/4;
     uint64_t uimm = 0;
     uimm = BIT_RANGE(insn,0,25) << 2; // imm:'00'
-    int64_t imm = signExtend(uimm,27);
+    int64_t imm = signExtend(uimm,64);
     return imm + pc;
 }
 

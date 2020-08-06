@@ -77,9 +77,12 @@ uint32_t new_ret_insn(int8_t rnn) { // ret x[rn], default rn value is 13. just s
     return opcode;
 }
 
-uint32_t new_mov_immediate_insn(uint8_t rd, uint16_t imm) { // movz x<rd>, #imm
+uint32_t new_mov_immediate_insn(uint8_t rd, uint16_t imm, uint8_t is64) { // movz x<rd>, #imm
     uint32_t opcode = 0;
-    opcode |= SET_BITS(0b1,31); // set sf
+    if (is64 == 1) // if is64, do a x<rd>, if not, do w<rd>
+        opcode |= SET_BITS(0b1,31); // set sf
+    else
+        opcode |= SET_BITS(0b0,31);
     opcode |= SET_BITS(0b1010010100,21); // set opcode, hw
     opcode |= SET_BITS(imm,5); // set imm
     opcode |= (rd % (1<<5)); // set rd
@@ -92,4 +95,17 @@ uint32_t replace_adr_addr(addr_t offset, uint32_t insn, int64_t addr) {
     //printf("New PC-relative address: 0x%llx\n",addr-8);
     opcode = new_insn_adr(offset,rd,addr);
     return opcode;
+}
+
+uint32_t new_branch(int64_t where, int64_t addr) {
+    int64_t res = 0;
+    uint32_t opcode = 0;
+    opcode |= SET_BITS(0b000101,26);
+    res = (addr - where) / 4;
+    opcode |= (res % (1<<25));
+    return opcode;
+}
+
+uint32_t new_nop() {
+    return 0xD503201F;
 }
