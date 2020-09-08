@@ -9,7 +9,7 @@
 #include "patchfinder64.h"
 
 bool auth_ptrs = false;
-typedef unsigned long long addr_t;
+typedef uint64_t addr_t;
 static addr_t kerndumpbase = -1;
 static addr_t xnucore_base = 0;
 static addr_t xnucore_size = 0;
