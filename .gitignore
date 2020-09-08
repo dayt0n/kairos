@@ -3,3 +3,4 @@ kairos
 *.im4p.*
 tests
 extra
+.vscode

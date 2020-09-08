@@ -102,9 +102,9 @@ uint64_t iboot64_ref(struct iboot64_img* iboot_in, void* pat) {
 }
 
 // inspiration for these functions from tihmstar/ih8sn0w
-int change_bootarg_adr_xref_addr(uint8_t* buf,addr_t dest, addr_t address,uint64_t base) {
+int change_bootarg_adr_xref_addr(struct iboot64_img* iboot_in, addr_t dest, addr_t address) {
 	// get instruction type
-	uint32_t insn = get_insn(buf,dest);
+	uint32_t insn = get_insn(iboot_in->buf,dest);
 	insn_type_t type = get_type(insn);
 	if(type == unknown) {
 		return -1;
@@ -112,60 +112,67 @@ int change_bootarg_adr_xref_addr(uint8_t* buf,addr_t dest, addr_t address,uint64
 	if(type == adr) {
 		uint16_t pc = dest/4;
 		int64_t oldAddr = get_addr_for_adr(dest,insn);
-		uint32_t newAdr = replace_adr_addr(dest,insn,address-(addr_t)buf);
-		write_opcode(buf,dest,newAdr);
+		uint32_t newAdr = replace_adr_addr(dest,insn,address-(addr_t)iboot_in->buf);
+		write_opcode(iboot_in->buf,dest,newAdr);
 	}
 	return 0;
 }
 
-int doFinalBootArgs(uint8_t* buf, addr_t xref,uint64_t base, addr_t default_args_loc) {
-	uint32_t adrInsn = get_insn(buf,xref);
+int doFinalBootArgs(struct iboot64_img* iboot_in, addr_t xref, addr_t default_args_loc) {
+	uint32_t adrInsn = get_insn(iboot_in->buf,xref);
 	uint8_t rd = get_rd(adrInsn);
 	// find next csel
 	addr_t temp = xref;
-	while(get_type(get_insn(buf,temp)) != csel)
+	while(get_type(get_insn(iboot_in->buf,temp)) != csel)
 		temp += 4;
-	uint32_t cselInsn = get_insn(buf,temp);
+	uint32_t cselInsn = get_insn(iboot_in->buf,temp);
 	if(get_rn(cselInsn) != rd && get_rm(cselInsn) != rd) {
 		printf("[!] CSEL instruction does not compare the same register as the previous ADR instruction\n");
 		return -1;
 	}
 	uint32_t movInsn = new_mov_register_insn(get_rd(cselInsn),-1,rd,0); // change csel to mov, no conditions here. mov x# boot-arg-addr
-	write_opcode(buf,temp,movInsn);
+	write_opcode(iboot_in->buf,temp,movInsn);
 	printf("[+] Changed CSEL to MOV\n");
 	// now we need to look for the bl instruction before this entire method
 	temp -=4; // keep our distance
-	while(get_supertype(get_insn(buf,temp)) != supertype_branch_immediate || get_type(get_insn(buf,temp)) == bl)
+	while(get_supertype(get_insn(iboot_in->buf,temp)) != supertype_branch_immediate || get_type(get_insn(iboot_in->buf,temp)) == bl)
 		temp -=4;
 	int64_t bImmediate = 0;
-	if(get_type(get_insn(buf,temp)) == bl)
-		bImmediate = get_addr_for_bl(temp,get_insn(buf,temp));
-	else if(get_type(get_insn(buf,temp)) == cbz)
-		bImmediate = get_addr_for_cbz(temp,get_insn(buf,temp));
+	if(get_type(get_insn(iboot_in->buf,temp)) == cbz || get_type(get_insn(iboot_in->buf,temp)) == bcond )
+		bImmediate = get_addr_for_cbz(temp,get_insn(iboot_in->buf,temp));
 	else {
 		printf("[!] Something went wrong when finding branch instructions\n");
 		return -1;
 	}
-	printf("[+] Found branch pointing to 0x%llx at 0x%llx\n",((bImmediate-(temp/4))+temp)+base,temp);
+	printf("[+] Found branch pointing to 0x%llx at 0x%llx\n",((bImmediate-(temp/4))+temp)+iboot_in->base,temp);
 	temp = ((bImmediate-(temp/4))+temp); // set temp to the addr that bl goes to
-	while(get_type(get_insn(buf,temp)) != adr) // look for next adr instruction
-		temp += 4;
-	int64_t oldAddr = get_addr_for_adr(temp,get_insn(buf,temp));
-	uint8_t oldRD = get_rd(get_insn(buf,temp));
-	uint32_t newAdr = replace_adr_addr(temp,get_insn(buf,temp),default_args_loc-(addr_t)buf); // replace with boot-arg location
-	write_opcode(buf,temp,newAdr);
-	printf("[+] Changed ADR X%d, 0x%llx to ADR X%d, 0x%llx\n",oldRD,((oldAddr-(temp/4))+temp)+base,get_rd(newAdr),(default_args_loc-(addr_t)buf)+base);
+	for(int i = 0; i < 15; i++) { // look for next adr instruction. honestly, this may not even be needed
+	// it doesn't seem to do any damage, but for older iboots boot args don't seem to have a conditional branch where a dst reg is replaced
+	// and the csel -> mov insn really seems to do what we want here anyway...
+		if (temp > iboot_in->len)
+			break;
+		if(get_type(get_insn(iboot_in->buf,temp)) != adr)
+			temp += 4;
+		else {
+			int64_t oldAddr = get_addr_for_adr(temp,get_insn(iboot_in->buf,temp));
+			uint8_t oldRD = get_rd(get_insn(iboot_in->buf,temp));
+			uint32_t newAdr = replace_adr_addr(temp,get_insn(iboot_in->buf,temp),default_args_loc-(addr_t)iboot_in->buf); // replace with boot-arg location
+			write_opcode(iboot_in->buf,temp,newAdr);
+			printf("[+] Changed ADR X%d, 0x%llx to ADR X%d, 0x%llx\n",oldRD,((oldAddr-(temp/4))+temp)+iboot_in->base,get_rd(newAdr),(default_args_loc-(addr_t)iboot_in->buf)+iboot_in->base);
+			break;
+		}
+	}
 	return 0;
 }
 
-void do_kdbg_mov(uint8_t* buf, addr_t xref, uint64_t base) {
+void do_kdbg_mov(struct iboot64_img* iboot_in, addr_t xref) {
 	// find second bl instruction
-	xref = get_next_nth_insn(buf,xref,2,bl);
+	xref = get_next_nth_insn(iboot_in->buf,xref,2,bl);
 	printf("[+] Found second bl after debug-enabled xref at 0x%llx\n",xref);
 	// now we need to change this bl to movz x0, #1
 	uint32_t movOp = new_mov_immediate_insn(0,1,1);
-	write_opcode(buf,xref,movOp);
-	printf("[+] Wrote MOVZ X0, #1 to 0x%llx\n",xref+base);
+	write_opcode(iboot_in->buf,xref,movOp);
+	printf("[+] Wrote MOVZ X0, #1 to 0x%llx\n",xref+iboot_in->base);
 }
 
 bool checkIMG4Ref(uint8_t* buf, addr_t xref) {
@@ -177,23 +184,22 @@ bool checkIMG4Ref(uint8_t* buf, addr_t xref) {
 		 * add x3, sp, #0x...
 		*/
 		if((get_type(get_insn(buf,xref)) == add) && (get_rd(get_insn(buf,xref)) == 3) && (get_rn(get_insn(buf,xref)) == 0x1f)) {
-			if((get_type(get_insn(buf,xref-4)) == add) && (get_rd(get_insn(buf,xref-4)) == 2) && (get_rn(get_insn(buf,xref-4)) == 0x1f))
-				return true;
+			return true;
 		}
 		xref -= 4;
 	}
 	return false;
 }
 
-void do_rsa_sigcheck_patch(uint8_t* buf, uint64_t len, addr_t img4Xref, uint64_t base) {
-	addr_t img4refFtop = bof64(buf, 0, img4Xref);
+void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref ) {
+	addr_t img4refFtop = bof64(iboot_in->buf, 0, img4Xref);
 	printf("[+] Found beginning of _image4_get_partial at 0x%llx\n",img4refFtop);
 	// jump around
-	addr_t img4GetPartialRef = xref64code(buf, 0, len, img4refFtop);
+	addr_t img4GetPartialRef = xref64code(iboot_in->buf, 0, iboot_in->len, img4refFtop);
 	for(int i = 0; i < 20; i++) {
-		if(checkIMG4Ref(buf,img4GetPartialRef))
+		if(checkIMG4Ref(iboot_in->buf,img4GetPartialRef))
 			break;
-		img4GetPartialRef = xref64code(buf,img4GetPartialRef+4,len-img4GetPartialRef-4,img4refFtop);
+		img4GetPartialRef = xref64code(iboot_in->buf,img4GetPartialRef+4,iboot_in->len-img4GetPartialRef-4,img4refFtop);
 		if(i == 19) {
 			printf("[!] Could not find correct xref for _image4_get_partial.\n");
 			printf("[!] RSA PATCH FAILED\n");
@@ -201,17 +207,17 @@ void do_rsa_sigcheck_patch(uint8_t* buf, uint64_t len, addr_t img4Xref, uint64_t
 		}
 	}
 	printf("[+] Found xref to _image4_get_partial at 0x%llx\n",img4GetPartialRef);
-	addr_t getPartialRefFtop = bof64(buf,0,img4GetPartialRef);
-	printf("[+] Found start of sub_%llx\n",base+getPartialRefFtop);
+	addr_t getPartialRefFtop = bof64(iboot_in->buf,0,img4GetPartialRef);
+	printf("[+] Found start of sub_%llx\n",iboot_in->base+getPartialRefFtop);
 	addr_t x2_adr = 0;
 	addr_t x3_adr = 0;
 	while(1) {
 		getPartialRefFtop += 4;
-		if(get_type(get_insn(buf,getPartialRefFtop)) == adr && get_rd(get_insn(buf,getPartialRefFtop)) == 2)
+		if(get_type(get_insn(iboot_in->buf,getPartialRefFtop)) == adr && get_rd(get_insn(iboot_in->buf,getPartialRefFtop)) == 2)
 			x2_adr = getPartialRefFtop;
-		else if(get_type(get_insn(buf,getPartialRefFtop)) == adr && get_rd(get_insn(buf,getPartialRefFtop)) == 3)
+		else if(get_type(get_insn(iboot_in->buf,getPartialRefFtop)) == adr && get_rd(get_insn(iboot_in->buf,getPartialRefFtop)) == 3)
 			x3_adr = getPartialRefFtop;
-		else if(get_type(get_insn(buf,getPartialRefFtop)) == bl) {
+		else if(get_type(get_insn(iboot_in->buf,getPartialRefFtop)) == bl) {
 			if(x2_adr && x3_adr)
 				break;
 			else {
@@ -220,20 +226,23 @@ void do_rsa_sigcheck_patch(uint8_t* buf, uint64_t len, addr_t img4Xref, uint64_t
 			}
 		}
 	}
-	int64_t verifyRef = get_addr_for_adr(x2_adr,get_insn(buf,x2_adr));
-	printf("[+] Found ADR X2, 0x%llx at 0x%llx\n",verifyRef-(x2_adr/4)+x2_adr+base,x2_adr);
-	addr_t verifyFunc = (get_ptr_loc(buf,verifyRef-(x2_adr/4)+x2_adr)-base); // dereference
+	int64_t verifyRef = get_addr_for_adr(x2_adr,get_insn(iboot_in->buf,x2_adr));
+	printf("[+] Found ADR X2, 0x%llx at 0x%llx\n",verifyRef-(x2_adr/4)+x2_adr+iboot_in->base,x2_adr);
+	addr_t verifyFunc = (get_ptr_loc(iboot_in->buf,verifyRef-(x2_adr/4)+x2_adr)-iboot_in->base); // dereference
+	if (verifyFunc > (addr_t)(iboot_in->buf+iboot_in->len)) { // in older versions a dereference does not need to be made
+		verifyFunc = verifyRef-(x2_adr/4)+x2_adr;
+	}
 	printf("[+] Call to 0x%llx\n",verifyFunc);
 	addr_t crawl = verifyFunc;
 	crawl += 4;
-	while(get_type(get_insn(buf,crawl)) != ret) {
+	while(get_type(get_insn(iboot_in->buf,crawl)) != ret) {
 		crawl += 4; 
 	}
-	printf("[+] RET found for sub_%llx at 0x%llx\n",verifyFunc+base,crawl);
+	printf("[+] RET found for sub_%llx at 0x%llx\n",verifyFunc+iboot_in->base,crawl);
 	uint32_t movInsn = new_mov_immediate_insn(0,0,1);
 	uint32_t retInsn = new_ret_insn(-1);
-	write_opcode(buf,crawl,movInsn);
-	write_opcode(buf,crawl+4,retInsn);
+	write_opcode(iboot_in->buf,crawl,movInsn);
+	write_opcode(iboot_in->buf,crawl+4,retInsn);
 	printf("[+] Did MOV r0, #0 and RET\n");
 }
 
@@ -281,7 +290,7 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 			LOG("Pointing boot-arg xref to cert string at: %p\n",GET_IBOOT64_ADDR(iboot_in,cert_loc));
 			memset(cert_loc,' ',179); // zero out cert_loc
 		}
-		change_bootarg_adr_xref_addr(iboot_in->buf,default_args_xref,(unsigned long long)cert_loc,iboot_in->base);
+		change_bootarg_adr_xref_addr(iboot_in,default_args_xref,(unsigned long long)cert_loc);
 		default_loc = cert_loc;
 	}
 	else if(strlen(bootargs) > 179) {
@@ -292,7 +301,7 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 	}
 	strncpy(default_loc,bootargs,strlen(bootargs)+num); // main part done. also no null terminator. don't like those
 	// now to patch up
-	return doFinalBootArgs(iboot_in->buf,default_args_xref,iboot_in->base,(unsigned long long)default_loc);
+	return doFinalBootArgs(iboot_in,default_args_xref,(unsigned long long)default_loc);
 }
 
 int enable_kernel_debug(struct iboot64_img* iboot_in) {
@@ -310,7 +319,7 @@ int enable_kernel_debug(struct iboot64_img* iboot_in) {
 	}
 	LOG("Found debug-enabled xref at 0x%llx\n",debugEnabledXref);
 	// now hand off ctrl to patchfinder to get rid of bl and replace with an unconditional mov
-	do_kdbg_mov(iboot_in->buf,debugEnabledXref,iboot_in->base);
+	do_kdbg_mov(iboot_in,debugEnabledXref);
 	LOG("Enabled kernel debug\n");
 	return 0;
 }
@@ -329,7 +338,7 @@ int rsa_sigcheck_patch(struct iboot64_img* iboot_in) {
 		return -1;
 	}
 	LOG("Found IMG4 xref at 0x%llx\n",img4Ref);
-	do_rsa_sigcheck_patch(iboot_in->buf, iboot_in->len, img4Ref, iboot_in->base);
+	do_rsa_sigcheck_patch(iboot_in, img4Ref);
 	return 0;
 }
 
