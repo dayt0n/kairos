@@ -2,6 +2,8 @@ kairos
 ======
 kairos is a 64-bit iOS boot image patcher written in C.
 
+Support for iOS 7-14+.
+
 Patches include:
 * RSA signature check removal
 * boot-arg modification
@@ -24,6 +26,7 @@ Note: the input boot image file must be decrypted and unpacked
 
 Credits
 -------
-* [xerub](https://twitter.com/xerub)/[Pwn20wnd](https://twitter.com/Pwn20wnd) for patchfinder64
+* [xerub](https://twitter.com/xerub), [Pwn20wnd](https://twitter.com/Pwn20wnd), [Sam Bingner](https://twitter.com/sbingner) for patchfinder64
 * [tihmstar](https://twitter.com/tihmstar) for code, inspiration, and patch methods
+* [Exploit3d](https://twitter.com/exploit3dguy) for code
 * [iH8sn0w](https://twitter.com/iH8sn0w) for code

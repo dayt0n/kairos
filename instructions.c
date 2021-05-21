@@ -62,6 +62,20 @@ uint32_t new_mov_register_insn(uint8_t rd, uint8_t rn, uint8_t rm, int64_t addr)
     return opcode;
 }
 
+uint32_t new_movk_insn(uint8_t rd, uint16_t imm, uint8_t shift, uint8_t is64) {
+    uint32_t opcode = 0;
+    if (is64 != 0)
+        opcode |= SET_BITS(0x1,31);
+    else
+        opcode |= SET_BITS(0x0,31);
+    opcode |= SET_BITS(0xE5,23);
+    if (shift != 0) // set hw if needed
+        opcode |= SET_BITS(shift>>4,21);
+    opcode |= SET_BITS(imm,5);
+    opcode |= (rd % (1<<5));
+    return opcode;
+}
+
 uint32_t new_ret_insn(int8_t rnn) { // ret x[rn], default rn value is 13. just set to -1 for default
     uint32_t opcode = 0;
     if(rnn >= 0) { 
