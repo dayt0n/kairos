@@ -90,7 +90,7 @@ uint32_t get_iboot64_version(struct iboot64_img* iboot_in) {
 	strncpy(vers,versionString+6,4);
 	iboot_in->VERS = atoi(vers);
 	// get minor version
-	bzero(vers,5);
+	memset(vers,'\0',5);
 	strncpy(vers,versionString+11,4);
 	char* period_loc = strchr(vers,'.');
 	*period_loc = '\0';
@@ -349,10 +349,10 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 			WARN("Could not find long string to override\n");
 			return -1; // no Reliance string or dart_ctrr. update code
 		}
-		bzero(new_loc,179);
+		memset(new_loc,'\0',179);
 	} else {
 		new_loc += 0x10;
-		bzero(new_loc,270); // zero out new_loc
+		memset(new_loc,'\0',270); // zero out new_loc
 	}
 	LOG("Pointing boot-arg xref to large string at: %p\n",GET_IBOOT64_ADDR(iboot_in,new_loc));
 	int ret = change_bootarg_adr_xref_addr(iboot_in,default_args_xref,(unsigned long long)new_loc);
