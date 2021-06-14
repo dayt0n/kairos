@@ -82,7 +82,9 @@ int main(int argc, char* argv[]) {
 		LOG("Does have kernel load\n");
 		if(bootArgs) {
 			LOG("Patching boot-args...\n");
-			patch_boot_args64(&iboot_in,bootArgs);
+			ret = patch_boot_args64(&iboot_in,bootArgs);
+			if (ret < 0)
+				WARN("Failed to patch boot-args\n");
 		}
 		LOG("Enabling kernel debug...\n");
 		ret = enable_kernel_debug(&iboot_in);

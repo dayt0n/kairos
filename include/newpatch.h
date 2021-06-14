@@ -30,7 +30,6 @@
 #define DEFAULT_BOOTARGS_STRING "rd=md0 nand-enable-reformat=1 -progress"
 #define OTHER_DEFAULT_BOOTARGS_STRING "rd=md0 -progress -restore"
 #define CERT_STRING "Reliance on this"
-#define DART_CTRR_STRING "void dart_ctrr_reconfig" // From what I can tell the "Reliance on this..." string is gone as of iOS 13.x :(
 
 struct iboot64_img { // from iBoot32Patcher
 	void* buf;

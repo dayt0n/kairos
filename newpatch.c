@@ -115,16 +115,24 @@ int change_bootarg_adr_xref_addr(struct iboot64_img* iboot_in, addr_t dest, addr
 	if(type == unknown) {
 		return -1;
 	}
-	if(type == adr) {
-		uint16_t pc = dest/4;
-		int64_t oldAddr = get_addr_for_adr(dest,insn);
-		uint32_t newAdr = replace_adr_addr(dest,insn,address-(addr_t)iboot_in->buf);
+	if(type == adr || type == nop) {
+		uint32_t newAdr = 0;
+		if ((iboot_in->VERS == 6723 && iboot_in->minor_vers >= 100) || iboot_in->VERS >= 7429)
+			newAdr = new_insn_adr(dest,24,address-(addr_t)iboot_in->buf);
+		else
+			newAdr = replace_adr_addr(dest,insn,address-(addr_t)iboot_in->buf);
+		if (newAdr == -1) {
+			WARN("Address too far away\n");
+			return -1;
+		}
 		write_opcode(iboot_in->buf,dest,newAdr);
 	}
 	return 0;
 }
 
 int doFinalBootArgs(struct iboot64_img* iboot_in, addr_t xref, addr_t default_args_loc) {
+	if ((iboot_in->VERS == 6723 && iboot_in->minor_vers >= 100) || iboot_in->VERS >= 7429) // not necessary as of iOS 14.5
+		return 0;
 	uint32_t adrInsn = get_insn(iboot_in->buf,xref);
 	uint8_t rd = get_rd(adrInsn);
 	// find next csel
@@ -267,13 +275,14 @@ void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref ) {
 	if (verifyFunc > (addr_t)(iboot_in->buf+iboot_in->len)) { // in older versions a dereference does not need to be made
 		verifyFunc = verifyRef-(x2_adr/4)+x2_adr;
 	}
-	LOG("Call to 0x%llx\n",verifyFunc);
+	LOG("Call to sub_%llx\n",verifyFunc+iboot_in->base);
 	addr_t crawl = verifyFunc;
-	crawl += 4;
-	while(get_type(get_insn(iboot_in->buf,crawl)) != ret) {
-		crawl += 4; 
+	if (iboot_in->VERS < 5540) { // iOS 10-12
+		crawl += 4;
+		while(get_type(get_insn(iboot_in->buf,crawl)) != ret) crawl += 4;
+		LOG("RET found for sub_%llx at 0x%llx\n",verifyFunc+iboot_in->base,crawl);
 	}
-	LOG("RET found for sub_%llx at 0x%llx\n",verifyFunc+iboot_in->base,crawl);
+	// otherwise, just patch at beginning, doesn't seem like this actually harms anything
 	uint32_t movInsn = new_mov_immediate_insn(0,0,1);
 	uint32_t retInsn = new_ret_insn(-1);
 	write_opcode(iboot_in->buf,crawl,movInsn);
@@ -286,10 +295,16 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 	void* default_loc = NULL;
 	int num = 1;
 	LOG("Image base address at 0x%llx\n",iboot_in->base);
-	default_loc = memmem(iboot_in->buf,iboot_in->len,DEFAULT_BOOTARGS_STRING,strlen(DEFAULT_BOOTARGS_STRING));
+	if ((iboot_in->VERS == 6723 && iboot_in->minor_vers >= 100) || iboot_in->VERS >= 7429) // 14.5 and up
+		default_loc = memmem(iboot_in->buf,iboot_in->len,"rd=md0",strlen("rd=md0"));
+	else
+		default_loc = memmem(iboot_in->buf,iboot_in->len,DEFAULT_BOOTARGS_STRING,strlen(DEFAULT_BOOTARGS_STRING));
 	if(!default_loc) { // if those are not found, try for the other possible string
 		LOG("Searching for alternate boot-args\n");
-		default_loc = memmem(iboot_in->buf,iboot_in->len,OTHER_DEFAULT_BOOTARGS_STRING,strlen(OTHER_DEFAULT_BOOTARGS_STRING));
+		if ((iboot_in->VERS == 6723 && iboot_in->minor_vers >= 100) || iboot_in->VERS >= 7429)
+			default_loc = memmem(iboot_in->buf,iboot_in->len," -progress",strlen(" -progress"));
+		else
+			default_loc = memmem(iboot_in->buf,iboot_in->len,OTHER_DEFAULT_BOOTARGS_STRING,strlen(OTHER_DEFAULT_BOOTARGS_STRING));
 		if(!default_loc) { // failed, uh oh
 			WARN("Could not find boot-arg string\n");
 			return -1;
@@ -297,46 +312,55 @@ int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
 	}
 	LOG("Found boot-arg string at %p\n",GET_IBOOT_FILE_OFFSET(iboot_in,default_loc));
 	uint64_t default_args_xref = iboot64_ref(iboot_in,default_loc);
+	if ((iboot_in->VERS == 6723 && iboot_in->minor_vers >= 100) || iboot_in->VERS >= 7429) {
+		LOG("Relocating from 0x%llx...\n",iboot_in->base+default_args_xref);
+		default_args_xref = get_next_nth_insn(iboot_in->buf,default_args_xref,5,nop);
+	}
 	if(!default_args_xref) {
 		WARN("Could not find boot-arg xref\n");
 		return -1;
 	}
-	LOG("Found boot-arg xref at 0x%llx\n", default_args_xref);
-	// if length is greater than we have room for, that is alright. we can do some magic
-	if((strlen(bootargs) > strlen(DEFAULT_BOOTARGS_STRING)) && (strlen(bootargs) < 180)) { 
-		void* cert_loc = NULL;
-		cert_loc = memmem(iboot_in->buf,iboot_in->len,CERT_STRING,strlen(CERT_STRING));
-		if(!cert_loc) {
-			cert_loc = memmem(iboot_in->buf,iboot_in->len,DART_CTRR_STRING,strlen(DART_CTRR_STRING));
-			if(!cert_loc) {
-				WARN("Could not find long string to override\n");
-				return -1; // no Reliance string or dart_ctrr. update code
-			}
-			if(strlen(bootargs) > 85) {
-				char bootargCpy[86] = { '\0' }; // sorry, gotta shorten it
-				strncpy(bootargCpy,bootargs,85);
-				bootargs = bootargCpy;
-				num = 0;
-				WARN("Truncated boot-args: %s\n",bootargs);
-			}
-			LOG("Pointing boot-arg xref to dart_ctrr string at: %p\n",GET_IBOOT64_ADDR(iboot_in,cert_loc));
-			memset(cert_loc,' ',85);
-		} else {
-			LOG("Pointing boot-arg xref to cert string at: %p\n",GET_IBOOT64_ADDR(iboot_in,cert_loc));
-			memset(cert_loc,' ',179); // zero out cert_loc
+	LOG("Found boot-arg xref at 0x%llx\n",iboot_in->base+default_args_xref);
+	// we only do xref relocation now. its cooler that way
+	if(strlen(bootargs) > 270) {
+		char bootargCpy[271] = { '\0' }; // sorry, gotta shorten it
+		strncpy(bootargCpy,bootargs,270);
+		bootargs = bootargCpy;
+		num = 0;
+		WARN("Truncated boot-args: %s\n",bootargs);
+	}
+	void* new_loc = NULL;
+	char zeros[270] = {0};
+	// cryptiiiic boot arg location
+	// https://github.com/Cryptiiiic/liboffsetfinder64/blob/4d034e5102178177e1bf9f5cc024a95651bed22b/liboffsetfinder64/ibootpatchfinder64_base.cpp#L225
+	// so much better than finding random error strings
+	new_loc = memmem(iboot_in->buf,iboot_in->len,zeros,270);
+	if(!new_loc) {
+		if (strlen(bootargs) >= 180) {
+			WARN("Boot arg string too long, truncating...\n");
+			char largerBootargCpy[180] = { '\0' };
+			strncpy(largerBootargCpy,bootargs,179);
+			bootargs = largerBootargCpy;
+			num = 0;
+			WARN("Truncated boot-args again: %s\n",bootargs);
 		}
-		change_bootarg_adr_xref_addr(iboot_in,default_args_xref,(unsigned long long)cert_loc);
-		default_loc = cert_loc;
-	}
-	else if(strlen(bootargs) > 179) {
-		WARN("Boot-arg string is too long!\n");
-		return -1;
+		new_loc = memmem(iboot_in->buf,iboot_in->len,CERT_STRING,strlen(CERT_STRING));
+		if(!new_loc) {
+			WARN("Could not find long string to override\n");
+			return -1; // no Reliance string or dart_ctrr. update code
+		}
+		bzero(new_loc,179);
 	} else {
-		memset(default_loc,' ',strlen(DEFAULT_BOOTARGS_STRING)); // zero out OG boot-arg string
+		new_loc += 0x10;
+		bzero(new_loc,270); // zero out new_loc
 	}
-	strncpy(default_loc,bootargs,strlen(bootargs)+num); // main part done. also no null terminator. don't like those
+	LOG("Pointing boot-arg xref to large string at: %p\n",GET_IBOOT64_ADDR(iboot_in,new_loc));
+	int ret = change_bootarg_adr_xref_addr(iboot_in,default_args_xref,(unsigned long long)new_loc);
+	if (ret < 0)
+		return -1;
+	strncpy(new_loc,bootargs,strlen(bootargs)+num); // main part done. also no null terminator. don't like those
 	// now to patch up
-	return doFinalBootArgs(iboot_in,default_args_xref,(unsigned long long)default_loc);
+	return doFinalBootArgs(iboot_in,default_args_xref,(unsigned long long)new_loc);
 }
 
 int enable_kernel_debug(struct iboot64_img* iboot_in) {

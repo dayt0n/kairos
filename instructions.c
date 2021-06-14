@@ -41,13 +41,13 @@ uint32_t new_insn_adr(addr_t offset,uint8_t rd, int64_t addr) {
     // do difference validations
     int64_t diff = addr - offset; // addr - offset to get pc rel
     if(diff > 0) {
-        if(diff > (1LL<<19)) // diff is too long, won't be able to fit
+        if(diff > (1LL<<20)) // diff is too long, won't be able to fit
             return -1;
-        else if(-diff > (1LL<<19)) // again, diff is too long but it is a signed int
+        else if(-diff > (1LL<<20)) // again, diff is too long but it is a signed int
             return -1;
     }
     opcode |= SET_BITS(BIT_RANGE(diff,0,1),29); // set pos 30-29 to immlo
-    opcode |= SET_BITS(BIT_RANGE(diff,2,19),5); // set pos 23-5  to immhi
+    opcode |= SET_BITS(BIT_RANGE(diff,2,20),5); // set pos 23-5  to immhi
     return opcode;
 }
 
@@ -106,7 +106,6 @@ uint32_t new_mov_immediate_insn(uint8_t rd, uint16_t imm, uint8_t is64) { // mov
 uint32_t replace_adr_addr(addr_t offset, uint32_t insn, int64_t addr) {
     uint32_t opcode = 0;
     uint8_t rd = get_rd(insn);
-    //printf("New PC-relative address: 0x%llx\n",addr-8);
     opcode = new_insn_adr(offset,rd,addr);
     return opcode;
 }
