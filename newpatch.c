@@ -221,8 +221,6 @@ void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref, bool p
 	if (pac == true) {
 		img4refFtop = img4refFtop - 0x4;
 	}
-	
-	
 	LOG("Found beginning of _image4_get_partial at 0x%llx\n",img4refFtop);
 	// older iBoot versions don't work with this patch method
 	// iPatcher, made by @exploit3dguy has some really effective patches for old iBoots
