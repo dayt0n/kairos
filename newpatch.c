@@ -22,6 +22,8 @@
 #define _GNU_SOURCE
 #include "newpatch.h"
 
+#define PACIBSP "\x7F\x23\x03\xD5"
+
 #ifdef _WIN32
 void *memmem(const void *haystack, size_t haystack_len, 
     const void * const needle, const size_t needle_len)
@@ -65,6 +67,15 @@ bool has_recovery_console_k(struct iboot64_img* iboot_in) {
 void* iboot64_memmem(struct iboot64_img* iboot_in, void* pat) { // slightly modified from ih8sn0w's iboot_memmem()
 	uint64_t new_pat = (uint64_t)GET_IBOOT64_ADDR(iboot_in, pat);
 	return (void*) memmem(iboot_in->buf,iboot_in->len,&new_pat,sizeof(uint64_t));
+}
+
+bool iboot64_pac_check(struct iboot64_img* iboot_in) {
+	void *pacibsp = memmem(iboot_in->buf,iboot_in->len,PACIBSP,0x4);
+	if (!pacibsp) {
+		return false;
+	}
+	WARN("PAC bootloader detected\n");
+	return true;
 }
 
 uint64_t get_iboot64_base_address(struct iboot64_img* iboot_in) {  // modified from ih8sn0w's get_iboot_base_address()
@@ -205,8 +216,13 @@ bool checkIMG4Ref(uint8_t* buf, addr_t xref) {
 	return false;
 }
 
-void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref ) {
+void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref, bool pac) {
 	addr_t img4refFtop = bof64(iboot_in->buf, 0, img4Xref);
+	if (pac == true) {
+		img4refFtop = img4refFtop - 0x4;
+	}
+	
+	
 	LOG("Found beginning of _image4_get_partial at 0x%llx\n",img4refFtop);
 	// older iBoot versions don't work with this patch method
 	// iPatcher, made by @exploit3dguy has some really effective patches for old iBoots
@@ -239,10 +255,13 @@ void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref ) {
 	}
 	// jump around
 	addr_t img4GetPartialRef = xref64code(iboot_in->buf, 0, iboot_in->len, img4refFtop);
+    
+	
 	for(int i = 0; i < 20; i++) {
 		if(checkIMG4Ref(iboot_in->buf,img4GetPartialRef))
 			break;
 		img4GetPartialRef = xref64code(iboot_in->buf,img4GetPartialRef+4,iboot_in->len-img4GetPartialRef-4,img4refFtop);
+
 		if(i == 19) {
 			WARN("Could not find correct xref for _image4_get_partial.\n");
 			WARN("RSA PATCH FAILED\n");
@@ -383,7 +402,7 @@ int enable_kernel_debug(struct iboot64_img* iboot_in) {
 	return 0;
 }
 
-int rsa_sigcheck_patch(struct iboot64_img* iboot_in) {
+int rsa_sigcheck_patch(struct iboot64_img* iboot_in, bool pac) {
 	void* img4Loc = NULL;
 	img4Loc = memmem(iboot_in->buf,iboot_in->len,"IMG4",4);
 	if(!img4Loc) {
@@ -397,7 +416,7 @@ int rsa_sigcheck_patch(struct iboot64_img* iboot_in) {
 		return -1;
 	}
 	LOG("Found IMG4 xref at 0x%llx\n",img4Ref);
-	do_rsa_sigcheck_patch(iboot_in, img4Ref);
+	do_rsa_sigcheck_patch(iboot_in, img4Ref, pac);
 	return 0;
 }
 
