@@ -30,6 +30,7 @@
 #define DEFAULT_BOOTARGS_STRING "rd=md0 nand-enable-reformat=1 -progress"
 #define OTHER_DEFAULT_BOOTARGS_STRING "rd=md0 -progress -restore"
 #define CERT_STRING "Reliance on this"
+#define PACIBSP "\x7F\x23\x03\xD5"
 
 struct iboot64_img { // from iBoot32Patcher
 	void* buf;
@@ -51,8 +52,9 @@ uint64_t get_iboot64_base_address(struct iboot64_img* iboot_in);
 uint32_t get_iboot64_version(struct iboot64_img* iboot_in);
 uint64_t iboot64_ref(struct iboot64_img* iboot_in, void* pat);
 int enable_kernel_debug(struct iboot64_img* iboot_in);
-int rsa_sigcheck_patch(struct iboot64_img* iboot_in);
+int rsa_sigcheck_patch(struct iboot64_img* iboot_in, bool pac);
 bool has_kernel_load_k(struct iboot64_img* iboot_in);
 bool has_recovery_console_k(struct iboot64_img* iboot_in);
 int do_command_handler_patch(struct iboot64_img* iboot_in, char* command, uintptr_t ptr);
 int unlock_nvram(struct iboot64_img* iboot_in);
+bool iboot64_pac_check(struct iboot64_img* iboot_in);

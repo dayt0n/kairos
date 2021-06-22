@@ -78,6 +78,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 	LOG("Base address: 0x%llx\n",get_iboot64_base_address(&iboot_in));
+    bool pac = iboot64_pac_check(&iboot_in);
 	if(has_kernel_load_k(&iboot_in)) {
 		LOG("Does have kernel load\n");
 		if(bootArgs) {
@@ -106,7 +107,7 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	LOG("Patching out RSA signature check...\n");
-	ret = rsa_sigcheck_patch(&iboot_in);
+	ret = rsa_sigcheck_patch(&iboot_in, pac);
 	if(ret < 0)
 		WARN("Error patching out RSA signature check\n");
 	// now write file
