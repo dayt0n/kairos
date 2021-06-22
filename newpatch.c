@@ -22,8 +22,6 @@
 #define _GNU_SOURCE
 #include "newpatch.h"
 
-#define PACIBSP "\x7F\x23\x03\xD5"
-
 #ifdef _WIN32
 void *memmem(const void *haystack, size_t haystack_len, 
     const void * const needle, const size_t needle_len)
