@@ -30,6 +30,7 @@
 #define DEFAULT_BOOTARGS_STRING "rd=md0 nand-enable-reformat=1 -progress"
 #define OTHER_DEFAULT_BOOTARGS_STRING "rd=md0 -progress -restore"
 #define CERT_STRING "Reliance on this"
+#define PACIBSP "\x7F\x23\x03\xD5"
 
 struct iboot64_img { // from iBoot32Patcher
 	void* buf;
