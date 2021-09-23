@@ -126,8 +126,22 @@ int change_bootarg_adr_xref_addr(struct iboot64_img* iboot_in, addr_t dest, addr
 	}
 	if(type == adr || type == nop) {
 		uint32_t newAdr = 0;
-		if ((iboot_in->VERS == 6723 && iboot_in->minor_vers >= 100) || iboot_in->VERS >= 7429)
-			newAdr = new_insn_adr(dest,24,address-(addr_t)iboot_in->buf);
+		if ((iboot_in->VERS == 6723 && iboot_in->minor_vers >= 100) || iboot_in->VERS >= 7429) {
+			int reg = 24;
+            void* default_loc = NULL;
+            default_loc = memmem(iboot_in->buf,iboot_in->len," -restore",strlen(" -restore"));
+			if (!default_loc) {
+				WARN("Failed to find restore bootarg string!\n");
+				WARN("Defaulting to the x24 register!\n");
+			} else {
+				uint64_t restore_string_xref = iboot64_ref(iboot_in,default_loc);
+				while(get_type(get_insn(iboot_in->buf,restore_string_xref)) != sub)
+					restore_string_xref += -4;
+				uint32_t subInsn = get_insn(iboot_in->buf,restore_string_xref);
+				reg = (int)(subInsn & 0xFF) - 160;
+			}
+            newAdr = new_insn_adr(dest,reg,address-(addr_t)iboot_in->buf);
+		}
 		else
 			newAdr = replace_adr_addr(dest,insn,address-(addr_t)iboot_in->buf);
 		if (newAdr == -1) {
