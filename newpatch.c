@@ -236,7 +236,9 @@ void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref, bool p
 	LOG("Found beginning of _image4_get_partial at 0x%llx\n",img4refFtop);
 	// older iBoot versions don't work with this patch method
 	// iPatcher, made by @exploit3dguy has some really effective patches for old iBoots
-	if (iboot_in->VERS < 3393) { // less than iOS 10
+	if (0) { // less than iOS 10
+		// It works effectively for decrypted images, 
+		// but does not for encrypted images. (tested: iPhone8,1, iBoot-2817.1.94)
 		void* movkLoc = NULL;
 		uint32_t movkInsn = 0;
 		if (iboot_in->VERS < 2261) // iOS 7
@@ -314,9 +316,46 @@ void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref, bool p
 	// otherwise, just patch at beginning, doesn't seem like this actually harms anything
 	uint32_t movInsn = new_mov_immediate_insn(0,0,1);
 	uint32_t retInsn = new_ret_insn(-1);
-	write_opcode(iboot_in->buf,crawl,movInsn);
-	write_opcode(iboot_in->buf,crawl+4,retInsn);
-	LOG("Did MOV r0, #0 and RET\n");
+	
+	void* mov_x0_0__ret = NULL;
+	uint32_t search[2];
+	search[0] = movInsn;
+	search[1] = retInsn;
+	mov_x0_0__ret = memmem(iboot_in->buf, iboot_in->len, &search, sizeof(search));
+	if(mov_x0_0__ret) {
+		// case1: ret0 gadget already exist
+		addr_t ret0_gadget = (addr_t)(mov_x0_0__ret - iboot_in->buf);
+		LOG("ret0 gadget at 0x%llx\n", ret0_gadget);
+		// make branch
+		write_opcode(iboot_in->buf, crawl, new_branch(crawl, ret0_gadget));
+		LOG("Did MOV r0, #0 and RET\n");
+	} else {
+		// case2: ret0 gadget does not exist.
+		void* nop_region = NULL;
+		uint32_t search_nop_region[16];
+		for(int i=0; i<16;i++) {
+			search_nop_region[i] = new_nop();
+		}
+		// Search NOP region
+		nop_region = memmem(iboot_in->buf, iboot_in->len, &search_nop_region, sizeof(search_nop_region));
+		if(nop_region) {
+			LOG("NOP region at 0x%llx\n", (addr_t)(nop_region - iboot_in->buf));
+			addr_t new_ret0 = (addr_t)(nop_region - iboot_in->buf + (4*8));
+			// create ret0
+			write_opcode(iboot_in->buf, new_ret0, movInsn);
+			write_opcode(iboot_in->buf, new_ret0+4, retInsn);
+			LOG("new ret0 gadget at 0x%llx\n", new_ret0);
+			// make branch
+			write_opcode(iboot_in->buf, crawl, new_branch(crawl, new_ret0));
+			LOG("Did MOV r0, #0 and RET\n");
+		} else {
+			// case3: ret0 gadget and NOP region does not exist.
+			// overwrite to ret
+			write_opcode(iboot_in->buf,crawl,movInsn);
+			write_opcode(iboot_in->buf,crawl+4,retInsn);
+			LOG("Did MOV r0, #0 and RET\n");
+		}
+	}
 }
 
 int patch_boot_args64(struct iboot64_img* iboot_in, char* bootargs) {
