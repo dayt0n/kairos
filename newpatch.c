@@ -285,11 +285,23 @@ void do_rsa_sigcheck_patch(struct iboot64_img* iboot_in, addr_t img4Xref, bool p
 	LOG("Found start of sub_%llx\n",iboot_in->base+getPartialRefFtop);
 	addr_t x2_adr = 0;
 	addr_t x3_adr = 0;
+
+	insn_type_t x3_type = adr;
+	if (iboot_in->VERS < 2817){ // iOS 8
+		/*
+		* adr        x2, #0x83d38d680 <-
+		* nop
+		* add        x3, sp, #0x9
+		* ...
+		*/
+		x3_type = add;
+	}
+    
 	while(1) {
 		getPartialRefFtop += 4;
 		if(get_type(get_insn(iboot_in->buf,getPartialRefFtop)) == adr && get_rd(get_insn(iboot_in->buf,getPartialRefFtop)) == 2)
 			x2_adr = getPartialRefFtop;
-		else if(get_type(get_insn(iboot_in->buf,getPartialRefFtop)) == adr && get_rd(get_insn(iboot_in->buf,getPartialRefFtop)) == 3)
+		else if(get_type(get_insn(iboot_in->buf,getPartialRefFtop)) == x3_type && get_rd(get_insn(iboot_in->buf,getPartialRefFtop)) == 3)
 			x3_adr = getPartialRefFtop;
 		else if(get_type(get_insn(iboot_in->buf,getPartialRefFtop)) == bl) {
 			if(x2_adr && x3_adr)
