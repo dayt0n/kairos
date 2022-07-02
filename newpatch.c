@@ -414,7 +414,7 @@ int enable_kernel_debug(struct iboot64_img* iboot_in) {
 
 int rsa_sigcheck_patch(struct iboot64_img* iboot_in, bool pac) {
 	void* img4Loc = NULL;
-	img4Loc = memmem(iboot_in->buf,iboot_in->len,"IMG4",4);
+	img4Loc = memmem(iboot_in->buf,iboot_in->len,"IMG4\0",5);
 	if(!img4Loc) {
 		WARN("Could not find IMG4 string\n");
 		return -1;
