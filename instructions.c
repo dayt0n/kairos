@@ -113,9 +113,15 @@ uint32_t replace_adr_addr(addr_t offset, uint32_t insn, int64_t addr) {
 uint32_t new_branch(int64_t where, int64_t addr) {
     int64_t res = 0;
     uint32_t opcode = 0;
-    opcode |= SET_BITS(0x5,26);
-    res = (addr - where) / 4;
-    opcode |= (res % (1<<25));
+    if(addr > where) {
+        opcode |= SET_BITS(0x5,26);
+        res = (addr - where) / 4;
+        opcode |= (res % (1<<25));
+    } else {
+        opcode |= SET_BITS(0x3,27);
+        res = (where - addr) / 4;
+        opcode -= (res % (1<<25));
+    }
     return opcode;
 }
 
